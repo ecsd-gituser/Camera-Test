@@ -9,14 +9,40 @@
 * { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, sans-serif; }
 body { background: #111; color: #fff; display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding: 10px;}
 h1 { margin: 20px 0; font-size: 2rem; text-align: center; }
+
 #cameraContainer { width: 100%; max-width: 720px; }
 video { width: 100%; border-radius: 10px; background: #000; }
 canvas { display: none; }
-#previewContainer img, #previewContainer video { width: 320px; margin-top: 10px; }
-#controls { display: flex; flex-wrap: wrap; justify-content: center; margin: 15px 0; gap: 10px; }
-select, button { padding: 10px; border-radius: 5px; border: none; }
-button { background: #0078d4; color: #fff; }
-#status { margin-top: 10px; color: #0f0; }
+
+#previewContainer img, #previewContainer video {
+  width: 320px;
+  margin-top: 10px;
+  border-radius: 5px;
+}
+
+#controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin: 15px 0;
+  gap: 10px;
+}
+
+select, button {
+  padding: 10px;
+  border-radius: 5px;
+  border: none;
+}
+
+button {
+  background: #0078d4;
+  color: #fff;
+}
+
+#status {
+  margin-top: 10px;
+  color: #0f0;
+}
 </style>
 </head>
 
@@ -38,10 +64,14 @@ button { background: #0078d4; color: #fff; }
     <option value="qr">QR Scan</option>
   </select>
 
-  <select id="formatSelect">
-    <option value="webm">WebM</option>
-    <option value="mp4">MP4</option>
-  </select>
+  <!-- ✅ FORMAT (TOGGLED) -->
+  <label id="formatContainer">
+    Format:
+    <select id="formatSelect">
+      <option value="webm">WebM</option>
+      <option value="mp4">MP4</option>
+    </select>
+  </label>
 
   <button id="start">Start</button>
   <button id="stop" style="display:none;">Stop</button>
@@ -59,6 +89,7 @@ const canvas = document.getElementById('canvas');
 const cameraSelect = document.getElementById('cameraSelect');
 const modeSelect = document.getElementById('modeSelect');
 const formatSelect = document.getElementById('formatSelect');
+const formatContainer = document.getElementById('formatContainer');
 const startBtn = document.getElementById('start');
 const stopBtn = document.getElementById('stop');
 const downloadBtn = document.getElementById('download');
@@ -72,13 +103,24 @@ let scanning = false;
 let currentMime = 'video/webm';
 
 
-// 🔹 INIT
+// ✅ TOGGLE FORMAT DROPDOWN
+function updateFormatVisibility() {
+  if (modeSelect.value === 'video') {
+    formatContainer.style.display = 'inline-block';
+  } else {
+    formatContainer.style.display = 'none';
+    formatSelect.value = 'webm';
+  }
+}
+
+modeSelect.addEventListener('change', updateFormatVisibility);
+
+
+// ✅ INIT
 async function init() {
   try {
-    // request permission FIRST
     await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
 
-    // load devices
     const devices = await navigator.mediaDevices.enumerateDevices();
     const cameras = devices.filter(d => d.kind === 'videoinput');
 
@@ -97,13 +139,13 @@ async function init() {
 
     if (cameraSelect.value) startCamera(cameraSelect.value);
 
-  } catch (err) {
+  } catch {
     status.textContent = 'Permission denied or blocked.';
   }
 }
 
 
-// 🔹 START CAMERA (FIXED)
+// ✅ START CAMERA
 async function startCamera(deviceId) {
   if (stream) stream.getTracks().forEach(t => t.stop());
 
@@ -116,9 +158,7 @@ async function startCamera(deviceId) {
     video.srcObject = stream;
 
     video.onloadedmetadata = async () => {
-      try {
-        await video.play();
-      } catch {}
+      try { await video.play(); } catch {}
     };
 
     status.textContent = 'Camera active';
@@ -134,7 +174,7 @@ cameraSelect.addEventListener('change', () => {
 });
 
 
-// 🔹 PHOTO
+// 📸 PHOTO
 function takePhoto() {
   canvas.width = video.videoWidth;
   canvas.height = video.videoHeight;
@@ -148,7 +188,7 @@ function takePhoto() {
 }
 
 
-// 🔹 VIDEO
+// 🎥 VIDEO
 function startRecording() {
   chunks = [];
 
@@ -179,7 +219,7 @@ function startRecording() {
 }
 
 
-// 🔹 QR
+// 🔍 QR
 function startQR() {
   scanning = true;
   const ctx = canvas.getContext('2d');
@@ -207,7 +247,7 @@ function startQR() {
 }
 
 
-// 🔹 BUTTONS
+// 🔘 BUTTONS
 startBtn.onclick = () => {
   preview.innerHTML = '';
   status.textContent = '';
@@ -234,7 +274,8 @@ downloadBtn.onclick = () => {
 };
 
 
-// 🔹 START APP
+// 🚀 START
+updateFormatVisibility();
 init();
 </script>
 
