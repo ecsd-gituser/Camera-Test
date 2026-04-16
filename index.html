@@ -64,7 +64,7 @@ button {
     <option value="qr">QR Scan</option>
   </select>
 
-  <!-- ✅ FORMAT (TOGGLED) -->
+  <!-- FORMAT (TOGGLED) -->
   <label id="formatContainer">
     Format:
     <select id="formatSelect">
@@ -185,6 +185,7 @@ function takePhoto() {
   preview.appendChild(img);
 
   downloadBtn.style.display = 'inline-block';
+  status.textContent = 'Photo ready!';
 }
 
 
@@ -211,17 +212,25 @@ function startRecording() {
     preview.appendChild(vid);
 
     downloadBtn.style.display = 'inline-block';
+    startBtn.style.display = 'inline-block';
+    stopBtn.style.display = 'none';
+    status.textContent = 'Video ready!';
   };
 
   recorder.start();
   startBtn.style.display = 'none';
   stopBtn.style.display = 'inline-block';
+  status.textContent = 'Recording...';
 }
 
 
-// 🔍 QR
+// 🔍 QR (CLICKABLE LINKS RESTORED)
 function startQR() {
   scanning = true;
+  startBtn.style.display = 'none';
+  stopBtn.style.display = 'inline-block';
+  status.textContent = 'Scanning QR...';
+
   const ctx = canvas.getContext('2d');
 
   function loop() {
@@ -235,8 +244,16 @@ function startQR() {
     const code = jsQR(img.data, img.width, img.height);
 
     if (code) {
-      status.innerHTML = code.data;
+      let url = code.data;
+
+      if (!/^https?:\/\//i.test(url)) {
+        url = 'https://' + url;
+      }
+
+      status.innerHTML = `QR: <a href="${url}" target="_blank">${url}</a>`;
       scanning = false;
+      startBtn.style.display = 'inline-block';
+      stopBtn.style.display = 'none';
       return;
     }
 
