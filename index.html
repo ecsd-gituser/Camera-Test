@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ECSD Camera</title>
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, sans-serif; }
+body { background: #111; color: #fff; display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding: 10px;}
+h1 { margin: 20px 0; font-size: 2rem; text-align: center; }
+#cameraContainer { width: 100%; max-width: 720px; }
+video { width: 100%; border-radius: 10px; background: #000; }
+canvas { display: none; }
+#previewContainer img, #previewContainer video { width: 320px; margin-top: 10px; }
+#controls { display: flex; flex-wrap: wrap; justify-content: center; margin: 15px 0; gap: 10px; }
+select, button { padding: 10px; border-radius: 5px; border: none; }
+button { background: #0078d4; color: #fff; }
+#status { margin-top: 10px; color: #0f0; }
+</style>
+</head>
+
+<body>
+
+<h1>ECSD Camera</h1>
+
+<div id="cameraContainer">
+  <video id="video" autoplay muted playsinline></video>
+  <canvas id="canvas"></canvas>
+</div>
+
+<div id="controls">
+  <select id="cameraSelect"></select>
+
+  <select id="modeSelect">
+    <option value="photo">Photo</option>
+    <option value="video">Video</option>
+    <option value="qr">QR Scan</option>
+  </select>
+
+  <select id="formatSelect">
+    <option value="webm">WebM</option>
+    <option value="mp4">MP4</option>
+  </select>
+
+  <button id="start">Start</button>
+  <button id="stop" style="display:none;">Stop</button>
+  <button id="download" style="display:none;">Download</button>
+</div>
+
+<div id="status"></div>
+<div id="previewContainer"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+
+<script>
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const cameraSelect = document.getElementById('cameraSelect');
+const modeSelect = document.getElementById('modeSelect');
+const formatSelect = document.getElementById('formatSelect');
+const startBtn = document.getElementById('start');
+const stopBtn = document.getElementById('stop');
+const downloadBtn = document.getElementById('download');
+const preview = document.getElementById('previewContainer');
+const status = document.getElementById('status');
+
+let stream = null;
+let recorder = null;
+let chunks = [];
+let scanning = false;
+let currentMime = 'video/webm';
+
+
+// 🔹 INIT
+async function init() {
+  try {
+    // request permission FIRST
+    await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+
+    // load devices
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const cameras = devices.filter(d => d.kind === 'videoinput');
+
+    cameraSelect.innerHTML = '';
+
+    cameras.forEach((cam, i) => {
+      const option = document.createElement('option');
+      option.value = cam.deviceId;
+
+      if (cam.label.toLowerCase().includes('front')) option.text = 'Front Camera';
+      else if (cam.label.toLowerCase().includes('back')) option.text = 'Back Camera';
+      else option.text = cam.label || `Camera ${i+1}`;
+
+      cameraSelect.appendChild(option);
+    });
+
+    if (cameraSelect.value) startCamera(cameraSelect.value);
+
+  } catch (err) {
+    status.textContent = 'Permission denied or blocked.';
+  }
+}
+
+
+// 🔹 START CAMERA (FIXED)
+async function startCamera(deviceId) {
+  if (stream) stream.getTracks().forEach(t => t.stop());
+
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { deviceId: { exact: deviceId } },
+      audio: true
+    });
+
+    video.srcObject = stream;
+
+    video.onloadedmetadata = async () => {
+      try {
+        await video.play();
+      } catch {}
+    };
+
+    status.textContent = 'Camera active';
+
+  } catch (err) {
+    console.error(err);
+    status.textContent = 'Camera error.';
+  }
+}
+
+cameraSelect.addEventListener('change', () => {
+  startCamera(cameraSelect.value);
+});
+
+
+// 🔹 PHOTO
+function takePhoto() {
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+
+  const img = document.createElement('img');
+  img.src = canvas.toDataURL();
+  preview.appendChild(img);
+
+  downloadBtn.style.display = 'inline-block';
+}
+
+
+// 🔹 VIDEO
+function startRecording() {
+  chunks = [];
+
+  let mime = 'video/webm';
+  if (formatSelect.value === 'mp4' && MediaRecorder.isTypeSupported('video/mp4')) {
+    mime = 'video/mp4';
+  }
+
+  currentMime = mime;
+
+  recorder = new MediaRecorder(stream, { mimeType: mime });
+
+  recorder.ondataavailable = e => chunks.push(e.data);
+
+  recorder.onstop = () => {
+    const blob = new Blob(chunks, { type: currentMime });
+    const vid = document.createElement('video');
+    vid.src = URL.createObjectURL(blob);
+    vid.controls = true;
+    preview.appendChild(vid);
+
+    downloadBtn.style.display = 'inline-block';
+  };
+
+  recorder.start();
+  startBtn.style.display = 'none';
+  stopBtn.style.display = 'inline-block';
+}
+
+
+// 🔹 QR
+function startQR() {
+  scanning = true;
+  const ctx = canvas.getContext('2d');
+
+  function loop() {
+    if (!scanning) return;
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0);
+
+    const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const code = jsQR(img.data, img.width, img.height);
+
+    if (code) {
+      status.innerHTML = code.data;
+      scanning = false;
+      return;
+    }
+
+    requestAnimationFrame(loop);
+  }
+
+  loop();
+}
+
+
+// 🔹 BUTTONS
+startBtn.onclick = () => {
+  preview.innerHTML = '';
+  status.textContent = '';
+
+  if (modeSelect.value === 'photo') takePhoto();
+  else if (modeSelect.value === 'video') startRecording();
+  else startQR();
+};
+
+stopBtn.onclick = () => {
+  if (recorder && recorder.state === 'recording') recorder.stop();
+  scanning = false;
+
+  startBtn.style.display = 'inline-block';
+  stopBtn.style.display = 'none';
+};
+
+downloadBtn.onclick = () => {
+  const blob = new Blob(chunks, { type: currentMime });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'recording.webm';
+  a.click();
+};
+
+
+// 🔹 START APP
+init();
+</script>
+
+</body>
+</html>
